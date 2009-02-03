@@ -1,0 +1,20 @@
+
+Libraries
+- expat
+- libxml
+- libdb
+- xslt?
+- image libraries
+
+
+Modules
+- install DB_File (missed on earlier build)
+- install LWP
+- install Bundle::CPAN
+- install DBI  # must do this before DBD::SQLite
+- install DBD::SQLite
+- install CPAN::SQLite
+- install ExtUtils::AutoInstall
+- install CPAN 1.92_63
+- install YAML::Syck
+- install CPAN::Reporter::Smoker
