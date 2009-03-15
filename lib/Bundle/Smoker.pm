@@ -16,6 +16,18 @@ File::HomeDir
 
 Parse::CPAN::Meta
 
+DBI
+
+DBD::SQLite
+
+CPAN::SQLite
+
+LWP
+
+ExtUtils::AutoInstall
+
+YAML::Syck
+
 Bundle::CPAN
 
 Config::Tiny
