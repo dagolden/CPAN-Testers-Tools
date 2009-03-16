@@ -19,6 +19,7 @@ my $finish=0;
 $SIG{HUP} = $SIG{TERM} = $SIG{INT} = \&prompt_quit; 
 
 for my $perl ( @perls ) {
+  system($perl, "-Ilib", "-MCPAN", "-e", "install('Bundle::Smoke')" );
   system($perl, 'start-smoke.pl');
 }
 
