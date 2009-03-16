@@ -19,12 +19,22 @@ my $finish=0;
 $SIG{HUP} = $SIG{TERM} = $SIG{INT} = \&prompt_quit; 
 
 for my $perl ( @perls ) {
+  print "\n#######################################################################\n";
+  print "### --- TESTING WITH '$perl'\n";
+  print "#######################################################################\n\n";
+
   unless ( -x $perl ) {
     warn "Not executable: '$perl'\n";
     next;
   }
-  system($perl, "-Ilib", "-MCPAN", "-e", "install('Bundle::Smoke')" );
+  system($perl, "-Ilib", "-MCPAN", "-e", "install('Bundle::Smoker')" );
   system($perl, 'start-smoke.pl');
+
+  print "\n#######################################################################\n";
+  print "### --- FINISHED WITH '$perl'\n";
+  print "#######################################################################\n\n";
+
+  sleep 5;
 }
 
 #--------------------------------------------------------------------------#

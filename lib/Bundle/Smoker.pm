@@ -52,5 +52,7 @@ CPAN::Reporter
 
 CPAN::Reporter::Smoker
 
+POE - otherwise, this is a huge, heavy prerequisite for a zillion modules
+
 =cut
 
