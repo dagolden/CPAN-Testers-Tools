@@ -19,6 +19,10 @@ my $finish=0;
 $SIG{HUP} = $SIG{TERM} = $SIG{INT} = \&prompt_quit; 
 
 for my $perl ( @perls ) {
+  unless ( -x $perl ) {
+    warn "Not executable: '$perl'\n";
+    next;
+  }
   system($perl, "-Ilib", "-MCPAN", "-e", "install('Bundle::Smoke')" );
   system($perl, 'start-smoke.pl');
 }
