@@ -13,7 +13,7 @@ chomp for @perls;
 close $fh;
 
 $ENV{PERL_CR_SMOKER_RUNONCE} = 1;
-$ENV{PERL_CR_SMOKER_SHORTCUT} = 1;
+#$ENV{PERL_CR_SMOKER_SHORTCUT} = 1; # for debugging
 
 my $finish=0;
 $SIG{HUP} = $SIG{TERM} = $SIG{INT} = \&prompt_quit; 
@@ -27,6 +27,8 @@ for my $perl ( @perls ) {
     warn "Not executable: '$perl'\n";
     next;
   }
+  local $ENV{PERL_MM_USE_DEFAULT} = 1;
+  local $ENV{PERL_EXTUTILS_AUTOINSTALL} = '--defaultdeps'; 
   system($perl, "-Ilib", "-MCPAN", "-e", "install('Bundle::Smoker')" );
   system($perl, 'start-smoke.pl');
 

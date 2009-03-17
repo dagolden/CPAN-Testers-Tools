@@ -8,7 +8,7 @@ rmtree( File::Spec->catdir($ENV{HOME}, qw/.cpan build/) );
 local $SIG{TERM} = sub { exit 1 };
 start(
   status_file=> "smoking.txt", 
-  list => shift,
+  (@ARGV ? (list => shift) : () ),
 );
 END {
   system('stty sane') unless $^O eq 'MSWin32';
