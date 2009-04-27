@@ -13,10 +13,10 @@ my @spec = (
   Param(
     "src|S", sub { -e "$_/makeaperl" or die "Not a perl source directory" }
   )->required,
-#  Param("old|O", $dist_re)->required,
-#  Param("new|N", $dist_re)->required,
-#  Param("dir|D")->required,
-#  Param("list|L")->required,
+  Param("old|O", $dist_re)->required,
+  Param("new|N", $dist_re)->required,
+  Param("dir|D")->required,
+  Param("list|L")->required,
   Param("threads|t"),
   Param("temp|-T"),
   List("extra|x"), 
@@ -55,10 +55,16 @@ exit;
 sub main {
   my ($opt) = @_;
 
+  # must have CPAN already configured
+  die "CPAN must be configured using ~/.cpan/CPAN/MyConfig.pm\n"
+    unless -r file( $ENV{HOME}, qw/ .cpan CPAN MyConfig.pm / );
+
   # setup temporary work directory
-  my $work_dir = $opt->get_temp ? pushd( $opt->get_temp ) | tempd();
+  my $work_dir = $opt->get_temp ? pushd( $opt->get_temp ) : tempd();
   my $perldir = dir($work_dir, 'perl'); 
   my $perlbin = file($perldir, 'bin', 'perl');
+  my $old_report_dir = dir ( $opt->get_dir, 'reports-old' );
+  my $new_report_dir = dir ( $opt->get_dir, 'reports-new' );
   
   print "*** Working directory is '$work_dir' ***\n";
 
@@ -67,12 +73,7 @@ sub main {
 
   # install CPAN::Reporter::Smoker and extra modules
   for my $mod ( 'YAML', 'CPAN::Reporter::Smoker', $opt->get_extra ) {
-    print "*** Installing $mod  ***\n";
-    local %ENV = (%ENV, _automated_testing_env());
-    system("$perlbin -MCPAN -e 'install(q{$mod})'")
-      and die "Problem installing CPAN::Reporter::Smoker. Stopping\n";
-    system("$perlbin -M$mod -e 1")
-      and die "Could not confirm $mod installed\n";
+    cpan_install( $perlbin, $mod );
   }
 
   # archive perl directory
@@ -80,7 +81,7 @@ sub main {
     and die "Problem archiving perl dir. Stopping.\n"; 
 
   # smoke_it( old dist )
-  smoke_it( $opt, $work_dir, $perlbin, $opt->get_old );
+  smoke_it( $opt, $work_dir, $old_report_dir, $perlbin, $opt->get_old );
 
   # restore perl from archive file
   eval { rmtree ($perldir); 1} 
@@ -89,7 +90,7 @@ sub main {
     and die "Problem extracting archived perl directory. Stopping\n";
 
   # smoke_it( new dist )
-  smoke_it( $opt, $work_dir, $perlbin, $opt->get_new );
+  smoke_it( $opt, $work_dir, $new_report_dir, $perlbin, $opt->get_new );
   
   # compare output directories
 
@@ -98,7 +99,7 @@ sub main {
 sub build_perl {
   my ($opt, $target_dir) = @_;
   my $pd = pushd( $opt->get_src );
-  print "*** Building perl from '$pd' ***\n";
+  print "*** Building perl from '$pd' to '$target_dir' ***\n";
   my $config_args="-des -Dprefix=$target_dir";
   $config_args .= " -Dusethreads" if $opt->get_threads;
   system("make realclean");
@@ -110,19 +111,44 @@ sub build_perl {
   system("make install") and die "Problem with install. Stopping\n";
 }
 
+sub cpan_install {
+  my ($perlbin, $mod) = @_;
+  print "*** Installing $mod ***\n";
+  local %ENV = (%ENV, _automated_testing_env());
+  system("$perlbin -MCPAN -e 'install(q{$mod})'")
+    and die "Problem installing CPAN::Reporter::Smoker. Stopping\n";
+  system("$perlbin -MCPAN -e 'exit !CPAN::Shell->expandany(q{$mod})->uptodate'")
+    and die "Could not confirm $mod installed\n";
+}
+
 sub smoke_it {
-  my ($opt, $work_dir, $perl_path, $regression_dist) = @_;
+  my ($opt, $work_dir, $result_dir, $perlbin, $dist) = @_;
+  print "*** Smoke testing with $dist ***\n";
+  $result_dir = $result_dir->absolute;
 
   # install regression distfile
+  cpan_install( $perlbin, $dist );
 
   # create output directory for results
-
-  # create temporary CPAN::Reporter config dir
+  mkpath( $result_dir );
 
   # CPAN::Reporter config.ini to save files to output directory
+  open my $fh, ">", 'config.ini' 
+    or die "Couldn't create CPAN::Reporter config file; $!\n";
+  print {$fh} << "ENDCONFIG";
+email_from = nobody\@example.org
+transport = File $result_dir
+ENDCONFIG
+
+  # set temporary CPAN::Reporter config dir
+  local $ENV{PERL_CPAN_REPORTER_DIR} = $work_dir;
 
   # smoke the list
-
+  my $list = $opt->get_list;
+  rmtree( File::Spec->catdir($ENV{HOME}, qw/.cpan build/) );
+  system( "$perlbin -MCPAN::Reporter::Smoker -e 'start(list => $list)'" );
+  system('stty sane');
+  
 }
 
 sub _automated_testing_env {
