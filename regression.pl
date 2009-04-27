@@ -4,6 +4,7 @@ use warnings;
 use Getopt::Lucid qw/:all/;
 use File::Path qw/mkpath rmtree/;
 use File::pushd qw/pushd tempd/;
+use File::Temp;
 use Path::Class;
 
 my $suffix = qr{\.(?:tar\.(?:bz2|gz|Z)|t(?:gz|bz)|(?<!ppm\.)zip|pm.gz)$}i; 
@@ -16,7 +17,7 @@ my @spec = (
   Param("old|O", $dist_re)->required,
   Param("new|N", $dist_re)->required,
   Param("dir|D")->required,
-  Param("list|L")->required,
+  Param("list|L", sub { -r } )->required,
   Param("threads|t"),
   Param("temp|-T"),
   List("extra|x"), 
@@ -72,11 +73,13 @@ sub main {
   build_perl( $opt, $perldir );
 
   # install CPAN::Reporter::Smoker and extra modules
-  for my $mod ( 'YAML', 'CPAN::Reporter::Smoker', $opt->get_extra ) {
+  my @requires = qw(YAML CPAN::SQLite CPAN::Reporter::Smoker);
+  for my $mod ( @requires, $opt->get_extra ) {
     cpan_install( $perlbin, $mod );
   }
 
   # archive perl directory
+  print "*** Archiving perl directory to restore later ***\n";
   system("tar clpf perl.tar perl") 
     and die "Problem archiving perl dir. Stopping.\n"; 
 
@@ -84,6 +87,7 @@ sub main {
   smoke_it( $opt, $work_dir, $old_report_dir, $perlbin, $opt->get_old );
 
   # restore perl from archive file
+  print "*** Restoring perl from archive ***\n";
   eval { rmtree ($perldir); 1} 
     or die "Problem removing modified perl directory. Stopping\n";
   system( 'tar xf perl.tar') 
@@ -93,6 +97,7 @@ sub main {
   smoke_it( $opt, $work_dir, $new_report_dir, $perlbin, $opt->get_new );
   
   # compare output directories
+  compare_results( $perlbin, $opt->get_dir, $old_report_dir, $new_report_dir); 
 
 }
 
@@ -123,32 +128,66 @@ sub cpan_install {
 
 sub smoke_it {
   my ($opt, $work_dir, $result_dir, $perlbin, $dist) = @_;
-  print "*** Smoke testing with $dist ***\n";
+  print "*** Preparing to smoke test with $dist ***\n";
   $result_dir = $result_dir->absolute;
 
   # install regression distfile
   cpan_install( $perlbin, $dist );
 
   # create output directory for results
-  mkpath( $result_dir );
+  mkpath( "$result_dir" );
+
+  # set temporary CPAN::Reporter config dir
+  my $config_dir = File::Temp::tempdir( CLEANUP => 1 );
+  local $ENV{PERL_CPAN_REPORTER_DIR} = $config_dir;
 
   # CPAN::Reporter config.ini to save files to output directory
-  open my $fh, ">", 'config.ini' 
+  my $fh = file( $config_dir, 'config.ini' )->openw
     or die "Couldn't create CPAN::Reporter config file; $!\n";
   print {$fh} << "ENDCONFIG";
 email_from = nobody\@example.org
 transport = File $result_dir
 ENDCONFIG
 
-  # set temporary CPAN::Reporter config dir
-  local $ENV{PERL_CPAN_REPORTER_DIR} = $work_dir;
-
   # smoke the list
   my $list = $opt->get_list;
+  print "*** Smoke testing distributions in '$list' ***\n";
   rmtree( File::Spec->catdir($ENV{HOME}, qw/.cpan build/) );
-  system( "$perlbin -MCPAN::Reporter::Smoker -e 'start(list => $list)'" );
+  system( "$perlbin -MCPAN::Reporter::Smoker -e 'start(list => q{$list})'" );
   system('stty sane');
   
+}
+
+sub compare_results {
+  my ($perlbin, $result_dir, $dir1, $dir2) = @_; 
+
+  my @dir1 = `ls $dir1`;
+  my @dir2 = `ls $dir2`;
+
+  my %dir1;
+  my %dir2;
+
+  my $checkarch = `$perlbin -V:archname`;
+  my ($archname) = $checkarch =~ m/'([^']+)'/;
+
+  for my $f ( @dir1 ) {
+    $f =~ /^(\w+)\.(.+?)\.$archname/;
+    $dir1{ $2 } = $1;
+  }
+
+  for my $f ( @dir2 ) {
+    $f =~ /^(\w+)\.(.+?)\.$archname/;
+    $dir2{ $2 } = $1;
+  }
+
+  my %dists = map { $_ => 1 } keys %dir1, keys %dir2;
+
+  my $fh = file( $result_dir, 'test-diff.txt' )->openw;
+
+  for my $d ( sort keys %dists ) {
+    next if exists $dir1{$d} && exists $dir2{$d} && $dir1{$d} eq $dir2{$d};
+    printf {$fh} "%8s %8s %s\n", $dir1{$d}, $dir2{$d}, $d;
+  }
 }
 
 sub _automated_testing_env {
