@@ -4,7 +4,6 @@ use warnings;
 use Getopt::Lucid qw/:all/;
 use File::Path qw/mkpath rmtree/;
 use File::pushd qw/pushd tempd/;
-use File::Temp;
 use Path::Class;
 
 my $suffix = qr{\.(?:tar\.(?:bz2|gz|Z)|t(?:gz|bz)|(?<!ppm\.)zip|pm.gz)$}i; 
@@ -144,7 +143,8 @@ sub smoke_it {
   mkpath( "$result_dir" );
 
   # set temporary CPAN::Reporter config dir
-  my $config_dir = File::Temp::tempdir( CLEANUP => 1 );
+  my $config_dir = dir( $work_dir , 'cpan-reporter-config', $dist );
+  $config_dir->mkpath;
   local $ENV{PERL_CPAN_REPORTER_DIR} = $config_dir;
 
   # CPAN::Reporter config.ini to save files to output directory
