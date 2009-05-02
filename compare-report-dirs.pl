@@ -13,11 +13,13 @@ my %dir2;
 
 for my $f ( @dir1 ) {
   $f =~ /^(\w+)\.(.+?)\.i686-linux/;
+  warn "Couldn't parse '$f'\n" unless defined $1 && defined $2;
   $dir1{ $2 } = $1;
 }
 
 for my $f ( @dir2 ) {
   $f =~ /^(\w+)\.(.+?)\.i686-linux/;
+  warn "Couldn't parse '$f'\n" unless defined $1 && defined $2;
   $dir2{ $2 } = $1;
 }
 
@@ -25,5 +27,5 @@ my %dists = map { $_ => 1 } keys %dir1, keys %dir2;
 
 for my $d ( sort keys %dists ) {
   next if exists $dir1{$d} && exists $dir2{$d} && $dir1{$d} eq $dir2{$d};
-  printf "%8s %8s %s\n", $dir1{$d}, $dir2{$d}, $d;
+  printf "%8s %8s %s\n", $dir1{$d} || '', $dir2{$d} || '', $d;
 }

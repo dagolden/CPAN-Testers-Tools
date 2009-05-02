@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Getopt::Lucid qw/:all/;
+use File::Basename qw/basename/;
 use File::Path qw/mkpath rmtree/;
 use File::pushd qw/pushd tempd/;
 use Path::Class;
@@ -11,7 +12,8 @@ my $dist_re = qr{[a-zA-Z]+/.+?$suffix};
 
 my @spec = (
   # required
-  Param( "src|S", sub { -e "$_/makeaperl" } )->required,
+  Param( "src|S", sub { -e "$_/makeaperl" } ),
+  Switch( "tar" )->needs('temp'),
   Param("old|O", $dist_re)->required,
   Param("new|N", $dist_re)->required,
   Param("dir|D", sub { -d } )->required,
@@ -26,8 +28,11 @@ my @spec = (
 my $usage = << "ENDHELP";
 usage: $0 <required options> <other options>
 
-REQUIRED OPTIONS:
+REQUIRES ONE OF THESE TWO OPTIONS:
   --src|-S    DIR       perl source directory
+  --tar                 perl.tar in --temp directory
+
+REQUIRED OPTIONS:
   --old|-O    DISTFILE  older distfile to test ("AUTHOR/TARBALL")
   --new|-N    DISTFILE  newer distfile to test ("AUTHOR/TARBALL")
   --dir|-D    DIR       directory for results
@@ -47,7 +52,14 @@ if ( grep { /--help|-h/ } @ARGV ) {
 
 my $opt = Getopt::Lucid->getopt( \@spec );
 
-main( $opt );
+die "Need one of --src or --tar\n" unless $opt->get_src || $opt->get_tar;
+
+
+if ( $opt->get_tar && ! -r file( $opt->get_temp, 'perl.tar' ) ) {
+  die "With '--tar', you must have perl.tar in '--temp' directory\n";
+}
+
+main($opt);
 exit;
 
 #--------------------------------------------------------------------------#
@@ -55,12 +67,15 @@ exit;
 sub main {
   my ($opt) = @_;
 
+  print "*** Starting regression test main loop ***\n";
+
   # must have CPAN already configured
   die "CPAN must be configured using ~/.cpan/CPAN/MyConfig.pm\n"
     unless -r file( $ENV{HOME}, qw/ .cpan CPAN MyConfig.pm / );
 
   # make paths absolute before changing directories
-  my $perl_src = dir( $opt->get_src )->absolute;
+  my $perl_src = $opt->get_src;
+  $perl_src = dir( $perl_src )->absolute if $perl_src;
   my $output_dir = dir( $opt->get_dir )->absolute;
   my $list = file($opt->get_list)->absolute;
 
@@ -74,19 +89,29 @@ sub main {
   
   print "*** Working directory is '$work_dir' ***\n";
 
-  # build perl in work directory
-  build_perl( $opt, $perl_src, $perl_dir );
+  if ( $perl_src ) {
+    # build perl in work directory
+    build_perl( $opt, $perl_src, $perl_dir ) unless $opt->get_tarball;
 
-  # install CPAN::Reporter::Smoker and extra modules
-  my @requires = qw(File::Temp YAML CPAN::SQLite CPAN::Reporter::Smoker);
-  for my $mod ( @requires, $opt->get_extra ) {
-    cpan_install( $perl_bin, $mod );
+    # install CPAN::Reporter::Smoker and extra modules
+    my @requires = qw(File::Temp YAML YAML::Syck CPAN CPAN::SQLite CPAN::Reporter::Smoker);
+    for my $mod ( @requires, $opt->get_extra ) {
+      cpan_install( $perl_bin, $mod );
+    }
+
+    # archive perl directory
+    print "*** Archiving perl directory to restore later ***\n";
+    system("tar clpf perl.tar perl") 
+      and die "Problem archiving perl dir. Stopping.\n"; 
   }
-
-  # archive perl directory
-  print "*** Archiving perl directory to restore later ***\n";
-  system("tar clpf perl.tar perl") 
-    and die "Problem archiving perl dir. Stopping.\n"; 
+  else {
+    # restore perl from archive file
+    print "*** Restoring perl from archive ***\n";
+    eval { rmtree ($perl_dir); 1} 
+      or die "Problem removing modified perl directory. Stopping\n";
+    system( 'tar xf perl.tar') 
+      and die "Problem extracting archived perl directory. Stopping\n";
+  }
 
   # smoke_it( old dist )
   smoke_it( $opt, $work_dir, $old_report_dir, $perl_bin, $opt->get_old, $list );
@@ -191,7 +216,7 @@ sub compare_results {
 
   for my $d ( sort keys %dists ) {
     next if exists $dir1{$d} && exists $dir2{$d} && $dir1{$d} eq $dir2{$d};
-    printf {$fh} "%8s %8s %s\n", $dir1{$d}, $dir2{$d}, $d;
+    printf {$fh} "%8s %8s %s\n", $dir1{$d} || 'missing', $dir2{$d} || 'missing', $d;
   }
 }
 
