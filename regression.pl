@@ -5,6 +5,7 @@ use Getopt::Lucid qw/:all/;
 use File::Basename qw/basename/;
 use File::Path qw/mkpath rmtree/;
 use File::pushd qw/pushd tempd/;
+use File::Slurp qw/read_file/;
 use Path::Class;
 
 my $suffix = qr{\.(?:tar\.(?:bz2|gz|Z)|t(?:gz|bz)|(?<!ppm\.)zip|pm.gz)$}i; 
@@ -127,7 +128,7 @@ sub main {
   smoke_it( $opt, $work_dir, $new_report_dir, $perl_bin, $opt->get_new, $list );
   
   # compare output directories
-  compare_results( $perl_bin, $output_dir, $old_report_dir, $new_report_dir); 
+  compare_results( $perl_bin, $output_dir, $list, $old_report_dir, $new_report_dir); 
 
 }
 
@@ -151,7 +152,7 @@ sub cpan_install {
   print "*** Installing $mod ***\n";
   local %ENV = (%ENV, _automated_testing_env());
   system("$perl_bin -MCPAN -e 'install(q{$mod})'")
-    and die "Problem installing CPAN::Reporter::Smoker. Stopping\n";
+    and die "Problem installing $mod\. Stopping\n";
   system("$perl_bin -MCPAN -e 'exit !CPAN::Shell->expandany(q{$mod})->uptodate'")
     and die "Could not confirm $mod installed\n";
 }
@@ -189,7 +190,13 @@ ENDCONFIG
 }
 
 sub compare_results {
-  my ($perl_bin, $result_dir, $dir1, $dir2) = @_; 
+  my ($perl_bin, $result_dir, $list, $dir1, $dir2) = @_; 
+
+  my %mb_dists = map {
+    chomp;
+    s{[^/]+/(.*)$suffix}{$1};
+    ( $_ => 1 )
+  } read_file( $list );
 
   my @dir1 = `ls $dir1`;
   my @dir2 = `ls $dir2`;
@@ -215,6 +222,7 @@ sub compare_results {
   my $fh = file( $result_dir, 'test-diff.txt' )->openw;
 
   for my $d ( sort keys %dists ) {
+    next unless exists $mb_dists{$d}; # skip distros not on the test list
     next if exists $dir1{$d} && exists $dir2{$d} && $dir1{$d} eq $dir2{$d};
     printf {$fh} "%8s %8s %s\n", $dir1{$d} || 'missing', $dir2{$d} || 'missing', $d;
   }
