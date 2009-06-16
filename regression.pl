@@ -92,7 +92,7 @@ sub main {
 
   if ( $perl_src ) {
     # build perl in work directory
-    build_perl( $opt, $perl_src, $perl_dir ) unless $opt->get_tarball;
+    build_perl( $opt, $perl_src, $perl_dir ) unless $opt->get_tar;
 
     # install CPAN::Reporter::Smoker and extra modules
     my @requires = qw(File::Temp YAML YAML::Syck CPAN CPAN::SQLite CPAN::Reporter::Smoker);
