@@ -95,7 +95,8 @@ sub main {
     build_perl( $opt, $perl_src, $perl_dir ) unless $opt->get_tar;
 
     # install CPAN::Reporter::Smoker and extra modules
-    my @requires = qw(File::Temp YAML YAML::Syck CPAN CPAN::SQLite CPAN::Reporter::Smoker);
+    # need M::B to avoid mb mismatch problems later
+    my @requires = qw(Module::Build File::Temp YAML YAML::Syck CPAN CPAN::SQLite CPAN::Reporter::Smoker);
     for my $mod ( @requires, $opt->get_extra ) {
       cpan_install( $perl_bin, $mod );
     }
