@@ -8,6 +8,13 @@ use File::pushd qw/pushd tempd/;
 use File::Slurp qw/read_file/;
 use Path::Class;
 
+# Notes
+# 
+# When regression testing, not only do the normal CPAN "speed" config
+# settings need to be turned on, but the index_timeout needs to 
+# be made quite long or CPAN will constantly be trying to update it,
+# which slows things down
+
 my $suffix = qr{\.(?:tar\.(?:bz2|gz|Z)|t(?:gz|bz)|(?<!ppm\.)zip|pm.gz)$}i; 
 my $dist_re = qr{[a-zA-Z]+/.+?$suffix};
 

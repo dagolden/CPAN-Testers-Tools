@@ -4,7 +4,7 @@ use warnings;
 use File::Slurp qw/read_file/;
 
 my ($list, $dir1, $dir2) = @ARGV;
-die "usage: $0 <dir1> <dir2>\n" unless -d $dir1 && -d $dir2;
+die "usage: $0 <list> <dir1> <dir2>\n" unless -f $list && -d $dir1 && -d $dir2;
 
 my $suffix = qr{\.(?:tar\.(?:bz2|gz|Z)|t(?:gz|bz)|(?<!ppm\.)zip|pm.gz)$}i; 
 
