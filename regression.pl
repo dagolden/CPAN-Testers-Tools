@@ -5,7 +5,6 @@ use Getopt::Lucid qw/:all/;
 use File::Basename qw/basename/;
 use File::Path qw/mkpath rmtree/;
 use File::pushd qw/pushd tempd/;
-use File::Slurp qw/read_file/;
 use Path::Class;
 
 # Notes
@@ -204,7 +203,7 @@ sub compare_results {
     chomp;
     s{[^/]+/(.*)$suffix}{$1};
     ( $_ => 1 )
-  } read_file( $list );
+  } do { local (@ARGV,$/) = $list; <> };
 
   my @dir1 = `ls $dir1`;
   my @dir2 = `ls $dir2`;
