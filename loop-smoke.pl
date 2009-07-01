@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Config;
+use File::Path qw/rmtree/;
 
 my $perl_list = shift;
 unless ( defined $perl_list && -r $perl_list ) {
@@ -24,6 +25,9 @@ for my $perl ( @perls ) {
   print "### --- TESTING WITH '$perl'\n";
   print "#######################################################################\n\n";
 
+  print "cleaning up CPAN build directory\n";
+  rmtree("/home/david/.cpan/build"); 
+
   unless ( -x $perl ) {
     warn "Not executable: '$perl'\n";
     next;
@@ -32,6 +36,7 @@ for my $perl ( @perls ) {
   local $ENV{PERL_EXTUTILS_AUTOINSTALL} = '--defaultdeps'; 
   system($perl, "-Ilib", "-MCPAN", "-e", "install('Bundle::Smoker')" );
   system($perl, 'start-smoke.pl');
+  system("stty sane");
 
   print "\n#######################################################################\n";
   print "### --- FINISHED WITH '$perl'\n";
