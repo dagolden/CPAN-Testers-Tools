@@ -6,6 +6,7 @@ use File::Basename qw/basename/;
 use File::Path qw/mkpath rmtree/;
 use File::pushd qw/pushd tempd/;
 use Path::Class;
+use Config::Tiny;
 
 # Notes
 # 
@@ -80,6 +81,23 @@ sub main {
   die "CPAN must be configured using ~/.cpan/CPAN/MyConfig.pm\n"
     unless -r file( $ENV{HOME}, qw/ .cpan CPAN MyConfig.pm / );
 
+  # get email from regular config or prompt
+  my $email_from;
+  my $reg_config 
+    = $ENV{PERL_CPAN_REPORTER_CONFIG} ? $ENV{PERL_CPAN_REPORTER_CONFIG} 
+    : $ENV{PERL_CPAN_REPORTER_DIR}    ? file( $ENV{PERL_CPAN_REPORTER_DIR},'config.ini') 
+    : file( $ENV{HOME}, qw/.cpanreporter config.ini/ ) ;
+
+  if ( -r $reg_config ) {
+    my $ct = Config::Tiny->read($reg_config);
+    $email_from = $ct->{_}{email_from};
+  }
+  while ( ! $email_from ) {
+    local $|=1;
+    print "Enter email address for reports: ";
+    chomp($email_from = <STDIN>);
+  }
+    
   # make paths absolute before changing directories
   my $perl_src = $opt->get_src;
   $perl_src = dir( $perl_src )->absolute if $perl_src;
@@ -122,7 +140,7 @@ sub main {
   }
 
   # smoke_it( old dist )
-  smoke_it( $opt, $work_dir, $old_report_dir, $perl_bin, $opt->get_old, $list );
+  smoke_it( $opt, $work_dir, $old_report_dir, $perl_bin, $opt->get_old, $list, $email_from );
 
   # restore perl from archive file
   print "*** Restoring perl from archive ***\n";
@@ -132,7 +150,7 @@ sub main {
     and die "Problem extracting archived perl directory. Stopping\n";
 
   # smoke_it( new dist )
-  smoke_it( $opt, $work_dir, $new_report_dir, $perl_bin, $opt->get_new, $list );
+  smoke_it( $opt, $work_dir, $new_report_dir, $perl_bin, $opt->get_new, $list, $email_from );
   
   # compare output directories
   compare_results( $perl_bin, $output_dir, $list, $old_report_dir, $new_report_dir); 
@@ -165,7 +183,7 @@ sub cpan_install {
 }
 
 sub smoke_it {
-  my ($opt, $work_dir, $result_dir, $perl_bin, $dist, $list) = @_;
+  my ($opt, $work_dir, $result_dir, $perl_bin, $dist, $list, $email_from) = @_;
   print "*** Preparing to smoke test with $dist ***\n";
   $result_dir = $result_dir->absolute;
 
@@ -184,7 +202,7 @@ sub smoke_it {
   my $fh = file( $config_dir, 'config.ini' )->openw
     or die "Couldn't create CPAN::Reporter config file; $!\n";
   print {$fh} << "ENDCONFIG";
-email_from = nobody\@example.org
+email_from = $email_from
 transport = File $result_dir
 ENDCONFIG
 
