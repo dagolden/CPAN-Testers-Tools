@@ -4,6 +4,7 @@ use warnings;
 use Test::Reporter;
 use IO::Dir;
 use File::Spec::Functions qw/catfile/;
+use Config::Tiny;
 
 my $dir_name = shift or die "usage: $0 <directory>\n";
 
@@ -14,11 +15,12 @@ my $email_from;
 my $reg_config 
   = $ENV{PERL_CPAN_REPORTER_CONFIG} ? $ENV{PERL_CPAN_REPORTER_CONFIG} 
   : $ENV{PERL_CPAN_REPORTER_DIR}    ? file( $ENV{PERL_CPAN_REPORTER_DIR},'config.ini') 
-  : file( $ENV{HOME}, qw/.cpanreporter config.ini/ ) ;
+  : catfile( $ENV{HOME}, qw/.cpanreporter config.ini/ ) ;
 
 if ( -r $reg_config ) {
   my $ct = Config::Tiny->read($reg_config);
   $email_from = $ct->{_}{email_from};
+  print "Sending emails with 'From: $email_from'\n";
 }
 while ( ! $email_from ) {
   local $|=1;
