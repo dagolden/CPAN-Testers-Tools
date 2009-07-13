@@ -5,6 +5,7 @@ use Getopt::Lucid qw/:all/;
 use File::Basename qw/basename/;
 use File::Path qw/mkpath rmtree/;
 use File::pushd qw/pushd tempd/;
+use File::Slurp qw/read_file/;
 use Path::Class;
 use Config::Tiny;
 
@@ -229,8 +230,8 @@ sub compare_results {
   my %dir1;
   my %dir2;
 
-  my $checkarch = `$perl_bin -V:archname`;
-  my ($archname) = $checkarch =~ m/'([^']+)'/;
+  my $archname = `$perl_bin -MConfig -e "print \$Config{archname}\n"`;
+  chomp $archname;
 
   for my $f ( @dir1 ) {
     $f =~ /^(\w+)\.(.+?)\.$archname/;
