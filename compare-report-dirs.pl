@@ -1,41 +1,131 @@
 #!/usr/bin/env perl
+use 5.010;
 use strict;
 use warnings;
-use File::Slurp qw/read_file/;
+use Path::Class;
+use Getopt::Lucid qw/:all/;
+use Test::Reporter;
 
-my ($list, $dir1, $dir2) = @ARGV;
-die "usage: $0 <list> <dir1> <dir2>\n" unless -f $list && -d $dir1 && -d $dir2;
+my @spec = (
+  # required
+  Param("dir|D", sub { -d } )->required,
+  Param("list|L", sub { -r } )->required,
+  # optional
+  Switch("html"),
+  Switch("help|h"),
+);
+
+my $usage = << "ENDHELP";
+usage: $0 <required options> <other options>
+
+REQUIRED OPTIONS:
+  --dir|-D    DIR       directory for results
+  --list|-L   FILE      file with list of dists to test
+
+OTHER OPTIONS:
+  --html                generate a index.html file with results
+  --help|-h             usage guide
+ENDHELP
+
+# XXX nasty hack until Getopt::Lucid has better help
+if ( grep { /^(?:--help|-h)$/ } @ARGV ) {
+  print STDERR "$usage\n" and exit 
+}
+
+my $opt = Getopt::Lucid->getopt( \@spec );
+
+my $output_dir = dir( $opt->get_dir )->absolute;
+my $list = file($opt->get_list)->absolute;
+my $old_report_dir = dir( $output_dir, 'reports-old' );
+my $new_report_dir = dir( $output_dir, 'reports-new' );
+
+die "Error: Couldn't find 'reports-old' in results directory\n"
+  unless -d $old_report_dir;
+die "Error: Couldn't find 'reports-new' in results directory\n"
+  unless -d $new_report_dir;
 
 my $suffix = qr{\.(?:tar\.(?:bz2|gz|Z)|t(?:gz|bz)|(?<!ppm\.)zip|pm.gz)$}i; 
 
 my %mb_dists = map {
-  chomp;
   s{[^/]+/(.*)$suffix}{$1};
   ( $_ => 1 )
-} read_file( $list );
+} $list->slurp( chomp => 1 );
 
-my @dir1 = `ls $dir1`;
-my @dir2 = `ls $dir2`;
+my %old = read_results( $old_report_dir );
+my %new = read_results( $new_report_dir );
 
-my %dir1;
-my %dir2;
+my %all_dists = map { $_ => 1 } keys %old, keys %new;
 
-for my $f ( @dir1 ) {
-  $f =~ /^(\w+)\.(.+?)\.i686-linux/;
-  warn "Couldn't parse '$f'\n" unless defined $1 && defined $2;
-  $dir1{ $2 } = $1;
+
+my $html_fh;
+if ( $opt->get_html ) {
+  open $html_fh, ">", $output_dir->file("index.html");
+  print {$html_fh} << 'HTML';
+<html>
+<head><title>Regression test</title>
+<style>
+  body { font-family:sans-serif; background-color: white }
+  .grade    { text-align: center; font-weight:bold }
+  .grade a  { text-decoration: none }
+  .pass     { background-color: #00ff00 }
+  .fail     { background-color: #ff0000 }
+  .na       { background-color: orange }
+  .unknown  { background-color: silver }
+  .missing  { background-color: transparent }
+</style>
+</head>
+<body><h1>Regresssion test</h1>
+<table><tr><th>Old</th><th>New</ht><th>Dist</th></tr>
+HTML
+}
+else {
+  printf "%8s %8s %s\n", @$_ for ["  old  ", "  new  ", "dist"], [qw/------ ------ -------/];
 }
 
-for my $f ( @dir2 ) {
-  $f =~ /^(\w+)\.(.+?)\.i686-linux/;
-  warn "Couldn't parse '$f'\n" unless defined $1 && defined $2;
-  $dir2{ $2 } = $1;
-}
-
-my %dists = map { $_ => 1 } keys %dir1, keys %dir2;
-
-for my $d ( sort keys %dists ) {
+for my $d ( sort keys %all_dists ) {
   next unless exists $mb_dists{$d};
-  next if exists $dir1{$d} && exists $dir2{$d} && $dir1{$d} eq $dir2{$d};
-  printf "%8s %8s %s\n", $dir1{$d} || 'missing', $dir2{$d} || 'missing', $d;
+  next if exists $old{$d} && exists $new{$d} 
+              && $old{$d}{grade} eq $new{$d}{grade};
+  my $old_grade = $old{$d}{grade} || 'missing';
+  my $new_grade = $new{$d}{grade} || 'missing';
+
+  if ( $opt->get_html ) {
+    my $old_path = exists $old{$d}{file} ? $old{$d}{file}->relative( $output_dir ) : '';
+    my $new_path = exists $new{$d}{file} ? $new{$d}{file}->relative( $output_dir ) : '';
+    print {$html_fh} qq{<tr>\n};
+    print {$html_fh} colorspan($old_grade, $old_path);
+    print {$html_fh} colorspan($new_grade, $new_path);
+    print {$html_fh} qq{  <td>$d</td>\n</tr>\n};
+  }
+  else {
+    printf "%8s %8s %s\n", $old_grade, $new_grade, $d;
+  }
 }
+
+if ( $opt->get_html ) {
+  print {$html_fh} "</table></body></html>\n";
+  close $html_fh;
+}
+
+sub read_results {
+  my ($dir) = @_;
+  my %results;
+  for my $f ( $dir->children ) {
+    my $tr = eval { Test::Reporter->new->read( $f ) };
+    if ( ! $tr ) {
+      warn "Error parsing $f: $@\n";
+      next;
+    }
+    $results{ $tr->distribution } = { file => $f, grade => $tr->grade };
+  }
+  return %results;
+}
+
+sub colorspan {
+  my ($grade, $path) = @_;
+  my $color;
+  return $path  ? qq{  <td class="grade $grade"><a href="$path">$grade</a></td>\n} 
+                : qq{  <td class="grade $grade">$grade</td>\n};
+}
+
+
