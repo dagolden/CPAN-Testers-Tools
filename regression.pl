@@ -21,7 +21,7 @@ my $dist_re = qr{[a-zA-Z]+/.+?$suffix};
 
 my @spec = (
   # required
-  Param( "src|S", sub { -e "$_/makeaperl" } ),
+  Param( "src|S", sub { -e "$_/makeaperl.SH" } ),
   Switch( "tar" )->needs('temp'),
   Param("old|O", $dist_re)->required,
   Param("new|N", $dist_re)->required,
