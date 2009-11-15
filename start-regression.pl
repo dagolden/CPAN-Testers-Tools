@@ -4,4 +4,5 @@
   --old EWILHELM/Module-Build-0.33.tar.gz     \
   --new DAGOLDEN/Module-Build-0.33_02.tar.gz  \
   --dir mb-comparison --list mb-list.txt      \
+  --extra POE --extra Moose                   \
   --temp /home/david/tmp

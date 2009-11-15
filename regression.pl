@@ -154,7 +154,8 @@ sub main {
   smoke_it( $opt, $work_dir, $new_report_dir, $perl_bin, $opt->get_new, $list, $email_from );
   
   # compare output directories
-  compare_results( $perl_bin, $output_dir, $list, $old_report_dir, $new_report_dir); 
+  system( $^X, File::Spec->catfile($ENV{HOME}, qw/git cpan-testers-tools compare-report-dirs.pl/, '-D', $output_dir, '-L', $list);
+#  compare_results( $perl_bin, $output_dir, $list, $old_report_dir, $new_report_dir); 
 
 }
 

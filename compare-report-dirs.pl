@@ -5,6 +5,7 @@ use warnings;
 use Path::Class;
 use Getopt::Lucid qw/:all/;
 use Test::Reporter;
+use File::Copy qw/copy/;
 
 my @spec = (
   # required
@@ -56,9 +57,12 @@ my %new = read_results( $new_report_dir );
 
 my %all_dists = map { $_ => 1 } keys %old, keys %new;
 
-
 my $html_fh;
 if ( $opt->get_html ) {
+  $output_dir->subdir("web-old")->rmtree;
+  $output_dir->subdir("web-old")->mkpath;
+  $output_dir->subdir("web-new")->rmtree;
+  $output_dir->subdir("web-new")->mkpath;
   open $html_fh, ">", $output_dir->file("index.html");
   print {$html_fh} << 'HTML';
 <html>
@@ -92,10 +96,23 @@ for my $d ( sort keys %all_dists ) {
   if ( $opt->get_html ) {
     my $old_path = exists $old{$d}{file} ? $old{$d}{file}->relative( $output_dir ) : '';
     my $new_path = exists $new{$d}{file} ? $new{$d}{file}->relative( $output_dir ) : '';
+    my ($old_copy, $new_copy); 
+    if ( $old_path ) { 
+      $old_copy = $output_dir->subdir("web-old")->file($old{$d}{file}->basename . ".txt"); 
+#      print "old: copying '$old{$d}{file}' to '$old_copy'\n";
+      copy( "$old{$d}{file}" => "$old_copy" ) or die "copy failed: $!";
+      $old_copy = $old_copy->relative( $output_dir );
+    }
+    if ( $new_path ) { 
+      $new_copy = $output_dir->subdir("web-new")->file($new{$d}{file}->basename . ".txt"); 
+#      print "new: copying '$new{$d}{file}' to '$new_copy'\n";
+      copy( "$new{$d}{file}" => "$new_copy" ) or die "copy failed: $!";
+      $new_copy = $new_copy->relative( $output_dir );
+    }
     print {$html_fh} qq{<tr>\n};
-    print {$html_fh} colorspan($old_grade, $old_path);
-    print {$html_fh} colorspan($new_grade, $new_path);
-    print {$html_fh} qq{  <td>$d</td>\n</tr>\n};
+    print {$html_fh} colorspan($old_grade, $old_copy);
+    print {$html_fh} colorspan($new_grade, $new_copy);
+    print {$html_fh} qq{  <td><a href="http://search.cpan.org/dist/$d">$d</a></td>\n</tr>\n};
   }
   else {
     printf "%8s %8s %s\n", $old_grade, $new_grade, $d;
